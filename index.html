@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+    <script type="text/javascript" src="paper.js"></script>
+    <script type="text/javascript">
+        (function () {
+            function Looper(tickLimit, countLimit, symbol) {
+                var items = [];
+                this.remove = function () {
+                    items.reduce(function (nothing, item) {
+                        item.remove();
+                        return nothing;
+                    });
+
+                };
+
+                this.tick = function (frame) {
+                    if (frame % tickLimit == 0) {
+                        if (items.length >= countLimit) {
+                            items.shift().remove();
+                        }
+                        items.push(symbol.create(frame, items.length));
+                    }
+                    items.forEach(function (item) {
+                        item.tick(frame);
+                    });
+                }
+            }
+
+            function Stacker(id) {
+                this.id = id;
+                var stack = [];
+                this.add = function (item) {
+                    stack.push(item);
+                };
+                this.remove = function () {
+                    items.reduce(function (nothing, item) {
+                        item.remove();
+                        return nothing;
+                    });
+                };
+                this.tick = function (frame) {
+                    stack = stack.reduce(function (newStack, item) {
+                        item.tick(frame);
+                        if (!item.isTrash()) {
+                            newStack.push(item);
+                        }
+                        return newStack;
+                    }, []);
+                };
+            }
+
+            function Timeline(stacker, id) {
+                this.id = stacker.id + '-' + id;
+                stacker.add(this);
+                var queue = [];
+                this.add = function (startFrame, endFrame, symbol) {
+                    if (typeof queue[startFrame] == 'undefined') {
+                        queue[startFrame] = [];
+                    }
+                    symbol.shouldTrash(function (frame) {
+                        return frame == endFrame
+                    });
+                    queue[startFrame].push(symbol);
+                };
+                this.tick = function (count) {
+                    if (typeof queue[count] == 'object') {
+                        queue[count].forEach(function (item) {
+                            item.create();
+                            stacker.add(item);
+                        });
+                        delete queue[count];
+                    }
+                };
+                this.isTrash = function () {
+                    return !(Array.from(queue.keys()).length > 0);
+                }
+            }
+
+            function Symbol(create, animate) {
+                var item = null;
+                this.create = function (frame, siblings) {
+                    item = create(frame, siblings);
+                    return this;
+                };
+                this.tick = function (frame) {
+                    if (!this.isTrash()) {
+                        if (typeof item == 'object') {
+                            animate(item, frame);
+                            if (this.shouldTrash(frame)) {
+                                item.remove();
+                                item = null;
+                            }
+                        }
+                    }
+                };
+                this.remove = function () {
+                    item.remove();
+                    item = null;
+                };
+                this.isTrash = function () {
+                    return item === null;
+                };
+                this.shouldTrash = function (frame) {
+                    return false;
+                };
+            }
+
+            var Shapes = function (config, extra) {
+                return {
+                    circle: function (frame, siblings) {
+                        var shape = Shape.Circle(config);
+                        shape.extra = extra;
+                        return shape;
+                    }
+                };
+            };
+
+            var Animations = {
+                forwardAnimation: function (shape, frame) {
+                    shape.fillColor.hue += 1;
+                    if(Math.floor(1 - ((shape.fillColor.hue % 2) / 2))){
+                        shape.extra.rotation -= 1;
+                        shape.position.y = shape.extra.offset - (Math.sin(shape.extra.rotation) * 5);
+                    }
+                },
+                backwardAnimation: function (shape, frame) {
+                    shape.fillColor.hue -= 1;
+                    if(Math.floor(1 - (((360 - shape.fillColor.hue) % 2) / 2))){
+                        shape.extra.rotation += 1;
+                        shape.position.y = shape.extra.offset - (Math.sin(shape.extra.rotation) * 5);
+                    }
+                }
+            };
+
+            paper.install(window);
+            stacker = new Stacker('root');
+
+            var section = [];
+            for(var y = 8; y > 0; y--){
+                for (var x = 50; x > 0; x--) {
+                    var color = new Color(1, 0, 0);
+                    color.hue = x * 2;
+                    section.push(new Symbol(
+                        Shapes({
+                            center: [(x * 10), (y * 50) - 10],
+                            radius: 10,
+                            fillColor: color
+                        }, {
+                            rotation: x,
+                            offset: (y * 50) - 10
+                        }).circle,
+                        y % 2 > 0 ? Animations.forwardAnimation : Animations.backwardAnimation
+                    ));
+                }
+            }
+
+//            timeline = new Timeline(stacker, '1');
+//            timeline.add(40, 60, new Symbol(
+//                Shapes({
+//                    center: [200, 200],
+//                    radius: 50,
+//                    fillColor: 'rgb(128, 0, 128)'
+//                }).circle,
+//                Animations.changeColour
+//            ));
+//            yes = new Symbol(
+//                Shapes({
+//                    center: [400, 200],
+//                    radius: 50,
+//                    fillColor: 'rgb(128, 0, 128)'
+//                }).circle,
+//                Animations.changeColour
+//            );
+
+            window.onload = function () {
+                paper.setup('myCanvas');
+                section.forEach(function (section) {
+                    stacker.add(section.create());
+                });
+                view.onFrame = function (e) {
+                    stacker.tick(e.count);
+                };
+            };
+        })();
+    </script>
+</head>
+<body>
+<canvas id="myCanvas" resize style="width: 100%; height: 100%;"></canvas>
+</body>
+</html>
